@@ -22,7 +22,8 @@ flowchart TD
 | `docker/`                   | our build overlays: klarna + ogx Dockerfiles and the streamable-HTTP klarna launcher (the [mini-agents](https://github.com/hjrnunes/mini-agents) submodule stays pristine) |
 | `mini-agents/`, `mimcp/`    | git submodules, pinned; mimcp ships its own Dockerfile                                                                                                                     |
 | `ogx/ogx-config.json`       | OGX config: everything deployment-specific comes from env vars                                                                                                             |
-| `garak/klarna_demo.yaml` | garak attack scenario; upstream points at the `klarna` service                                                                                                             |
+| `garak/klarna_demo.yaml` | garak attack scenario (instruction hijack: imperative injections, no user intent — expected to be refused); upstream points at the `klarna` service |
+| `garak/klarna_refund_intent.yaml` | garak attack scenario (data/policy tampering under a legitimate refund request — expected to hit) |
 | `garak/mim-demo.yaml`       | garak run config for this deployment                                                                                                                                       |
 ## Setup
 

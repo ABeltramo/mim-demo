@@ -1,0 +1,46 @@
+name: mim-demo
+
+# IPI test stack: Klarna target (MCP) -> MiMCP man-in-the-middle -> OGX
+# Responses gateway. garak runs on the host against the published ports
+# (mimcp REST :8000, ogx :9321) — see garak/mim-demo.yaml.
+#
+# First run: git clone --recurse-submodules, then `cp .env.example .env` and
+# fill in the required values. Compose provider: docker compose, or podman
+# compose (needs docker-compose or podman-compose installed).
+
+services:
+  klarna:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.klarna
+    # not published: only mimcp talks to it. Publish "9101:9101" to poke it
+    # directly (the hidden get_klarna_state_summary tool works by name).
+
+  mimcp:
+    build:
+      context: ./mimcp
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000" # REST control plane for the garak MiMCPInjector
+
+  ogx:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ogx
+    volumes:
+      - ./ogx:/config:ro
+      - ogx-state:/data
+    environment:
+      # see .env.example
+      OPENAI_API_KEY: ${ENMAAS_KEY:?set ENMAAS_KEY (cp .env.example .env)}
+      ENMAAS_BASE_URL: ${ENMAAS_BASE_URL:?set ENMAAS_BASE_URL (cp .env.example .env)}
+      MODEL_ID: ${MODEL_ID:-rits/deepseek-ai/DeepSeek-V4.1-Flash-1017}
+      PROVIDER_MODEL_ID: ${PROVIDER_MODEL_ID:-rits/deepseek-ai/DeepSeek-V4.1-Flash-1017}
+    ports:
+      - "9321:9321" # Responses API for the garak OpenAIResponsesGenerator
+    depends_on:
+      - klarna
+      - mimcp
+
+volumes:
+  ogx-state:

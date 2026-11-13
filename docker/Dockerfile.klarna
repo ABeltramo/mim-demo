@@ -1,0 +1,21 @@
+# Klarna MCP target, built from the pristine mini-agents submodule plus this
+# repo's streamable-HTTP launcher overlay (see docker/klarna_http.py).
+# Build context: mim-demo root.
+
+FROM python:3.14-slim-bookworm
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /opt/app-root/src
+
+COPY mini-agents/pyproject.toml .
+COPY mini-agents/src ./src
+COPY docker/klarna_http.py .
+
+ENV VIRTUAL_ENV=/opt/app-root/.venv
+ENV PATH="/opt/app-root/.venv/bin:$PATH"
+RUN uv venv /opt/app-root/.venv && uv pip install --no-cache -e .
+
+EXPOSE 9101
+
+CMD ["python", "klarna_http.py"]

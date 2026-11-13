@@ -1,0 +1,8 @@
+*
+!docker
+!docker/**
+!mini-agents
+!mini-agents/**
+mini-agents/.venv
+mini-agents/.git
+mini-agents/.idea

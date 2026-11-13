@@ -1,0 +1,6 @@
+[submodule "mini-agents"]
+	path = mini-agents
+	url = https://github.com/hjrnunes/mini-agents
+[submodule "mimcp"]
+	path = mimcp
+	url = https://github.com/ABeltramo/MiMCP

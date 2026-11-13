@@ -1,0 +1,31 @@
+# garak run config for the mim-demo compose deployment.
+# Run from the mim-demo root so the relative scenario_file resolves:
+#   cd ~/repos/mim-demo
+#   OPENAI_API_KEY="$ENMAAS_KEY" uv run --project /path/to/garak \
+#     python -m garak --config garak/mim-demo.yaml
+#
+# Keep target_name in sync with MODEL_ID in .env.
+
+plugins:
+  target_type: openai.OpenAIResponsesGenerator
+  target_name: rits/deepseek-ai/DeepSeek-V4.1-Flash-1017
+  generators:
+    openai:
+      OpenAIResponsesGenerator:
+        uri: http://localhost:9321/v1
+  probes:
+    midojo:
+      MidojoProbe:
+        scenario_file: scenario/klarna_demo.yaml
+  injectors:
+    mimcp:
+      MiMCPInjector:
+        host: http://localhost:8000
+        # OGX reaches MiMCP through the compose network, not through the
+        # published port the runner uses
+        advertised_base: http://mimcp:8000
+run:
+  generations: 1
+  spec:
+    include:
+      - probes.midojo.MidojoProbe

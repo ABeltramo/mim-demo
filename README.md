@@ -1,33 +1,29 @@
 # mim-demo
 
-Containerised IPI test stack for the garak MiM demo: a Klarna support agent
-(fronted by the OGX Responses gateway) whose MCP tools are proxied by
+Containerised IPI test stack for the garak MiM demo: a Klarna support agent (fronted by the OGX Responses gateway) whose
+MCP tools are proxied by
 [MiMCP](https://github.com/ABeltramo/MiMCP), a man-in-the-middle that splices
 attack payloads into tool results.
 
 ```mermaid
-flowchart LR
+flowchart TD
     garak["garak runner (host)"] --> ogx["OGX Responses gateway"]
     ogx --> llm["inference provider\n(OpenAI-compatible)"]
-    ogx -- "MCP tool calls" --> mimcp["MiMCP\n(man-in-the-middle)"]
+    ogx -- " MCP tool calls " --> mimcp["MiMCP\n(man-in-the-middle)"]
     mimcp -- relay --> klarna["Klarna MCP target"]
-    mimcp -. "splices attack payloads\ninto tool results" .-> ogx
+    mimcp -. " splices attack payloads\ninto tool results " .-> ogx
 ```
 
 ## Layout
 
-| Path | What it is |
-|---|---|
-| `compose.yaml` | the three services and their wiring |
-| `docker/` | our build overlays: klarna + ogx Dockerfiles and the streamable-HTTP klarna launcher (the [mini-agents](https://github.com/hjrnunes/mini-agents) submodule stays pristine) |
-| `mini-agents/`, `mimcp/` | git submodules, pinned; mimcp ships its own Dockerfile |
-| `ogx/ogx-config.json` | OGX config: everything deployment-specific comes from env vars |
-| `scenario/klarna_demo.yaml` | garak attack scenario; upstream points at the `klarna` service |
-| `garak/mim-demo.yaml` | garak run config for this deployment |
-
-No credentials or provider URLs live in this repo: they all come from the
-environment (`.env`, read by compose automatically).
-
+| Path                        | What it is                                                                                                                                                                 |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `compose.yaml`              | the three services and their wiring                                                                                                                                        |
+| `docker/`                   | our build overlays: klarna + ogx Dockerfiles and the streamable-HTTP klarna launcher (the [mini-agents](https://github.com/hjrnunes/mini-agents) submodule stays pristine) |
+| `mini-agents/`, `mimcp/`    | git submodules, pinned; mimcp ships its own Dockerfile                                                                                                                     |
+| `ogx/ogx-config.json`       | OGX config: everything deployment-specific comes from env vars                                                                                                             |
+| `scenario/klarna_demo.yaml` | garak attack scenario; upstream points at the `klarna` service                                                                                                             |
+| `garak/mim-demo.yaml`       | garak run config for this deployment                                                                                                                                       |
 ## Setup
 
 ```bash
@@ -37,20 +33,16 @@ cp .env.example .env        # fill in OPENAI_API_KEY and OPENAI_BASE_URL
 podman compose up -d --build   # or: docker compose up -d --build
 ```
 
-`podman compose` needs a compose provider installed once (`brew install
-docker-compose`), and the machine running (`podman machine start`). Readiness:
+Readiness:
 
 ```bash
 curl -s http://localhost:8000/api/healthz   # mimcp
 curl -s http://localhost:9321/v1/models -H "Authorization: Bearer $OPENAI_API_KEY" | head
 ```
 
-Update submodules with `git submodule update --remote` when the upstreams
-move (then rebuild).
-
 ## Run garak against it
 
-From a [garak](https://github.com/NVIDIA/garak) checkout on branch
+From the [TrustyAI garak fork](https://github.com/trustyai-explainability/garak) checkout on branch
 `agent-ipi-probe`:
 
 ```bash

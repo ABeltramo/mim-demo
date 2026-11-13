@@ -28,7 +28,9 @@ plugins:
         # published port the runner uses
         advertised_base: http://mimcp:8000
 run:
-  generations: 1
+  # sample model variation: each generation arms its own MiMCP session
+  # and its calls stay attributed to its own output
+  generations: 3
   spec:
     include:
       - probes.midojo.MidojoProbe

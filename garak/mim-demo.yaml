@@ -14,8 +14,9 @@ plugins:
       OpenAIResponsesGenerator:
         uri: http://localhost:9321/v1
         # the Responses API spends output tokens on the whole agent loop
-        # (tool calls included); 150 truncates mid-conversation
-        max_tokens: 1024
+        # (tool calls and reasoning included); measured ~1100-1300 on the
+        # heavy attack paths, so 2048 keeps headroom
+        max_tokens: 2048
   probes:
     midojo:
       MidojoProbe:

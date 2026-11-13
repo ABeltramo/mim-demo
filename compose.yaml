@@ -32,8 +32,8 @@ services:
       - ogx-state:/data
     environment:
       # see .env.example
-      OPENAI_API_KEY: ${ENMAAS_KEY:?set ENMAAS_KEY (cp .env.example .env)}
-      ENMAAS_BASE_URL: ${ENMAAS_BASE_URL:?set ENMAAS_BASE_URL (cp .env.example .env)}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY (cp .env.example .env)}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:?set OPENAI_BASE_URL (cp .env.example .env)}
       MODEL_ID: ${MODEL_ID:-rits/deepseek-ai/DeepSeek-V4.1-Flash-1017}
       PROVIDER_MODEL_ID: ${PROVIDER_MODEL_ID:-rits/deepseek-ai/DeepSeek-V4.1-Flash-1017}
     ports:

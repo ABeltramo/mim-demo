@@ -34,7 +34,7 @@ environment (`.env`, read by compose automatically).
 ```bash
 git clone --recurse-submodules <this repo>
 cd mim-demo
-cp .env.example .env        # fill in ENMAAS_KEY and ENMAAS_BASE_URL
+cp .env.example .env        # fill in OPENAI_API_KEY and OPENAI_BASE_URL
 podman compose up -d --build   # or: docker compose up -d --build
 ```
 
@@ -43,7 +43,7 @@ docker-compose`), and the machine running (`podman machine start`). Readiness:
 
 ```bash
 curl -s http://localhost:8000/api/healthz   # mimcp
-curl -s http://localhost:9321/v1/models -H "Authorization: Bearer $ENMAAS_KEY" | head
+curl -s http://localhost:9321/v1/models -H "Authorization: Bearer $OPENAI_API_KEY" | head
 ```
 
 Update submodules with `git submodule update --remote` when the upstreams
@@ -56,7 +56,7 @@ From a [garak](https://github.com/NVIDIA/garak) checkout on branch
 
 ```bash
 cd /path/to/mim-demo     # the garak config uses a relative scenario path
-OPENAI_API_KEY="$ENMAAS_KEY" uv run --project /path/to/garak \
+OPENAI_API_KEY=<your key> uv run --project /path/to/garak \
   python -m garak --config garak/mim-demo.yaml
 ```
 

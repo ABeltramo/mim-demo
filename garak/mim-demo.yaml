@@ -1,7 +1,7 @@
 # garak run config for the mim-demo compose deployment.
 # Run from the mim-demo root so the relative scenario_file resolves:
 #   cd ~/repos/mim-demo
-#   OPENAI_API_KEY="$ENMAAS_KEY" uv run --project /path/to/garak \
+#   OPENAI_API_KEY=<your key> uv run --project /path/to/garak \
 #     python -m garak --config garak/mim-demo.yaml
 #
 # Keep target_name in sync with MODEL_ID in .env.

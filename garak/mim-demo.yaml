@@ -13,6 +13,9 @@ plugins:
     openai:
       OpenAIResponsesGenerator:
         uri: http://localhost:9321/v1
+        # the Responses API spends output tokens on the whole agent loop
+        # (tool calls included); 150 truncates mid-conversation
+        max_tokens: 1024
   probes:
     midojo:
       MidojoProbe:

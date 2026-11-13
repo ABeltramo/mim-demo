@@ -5,14 +5,13 @@ Containerised IPI test stack for the garak MiM demo: a Klarna support agent
 [MiMCP](https://github.com/ABeltramo/MiMCP), a man-in-the-middle that splices
 attack payloads into tool results.
 
-```
-garak (host) ──> ogx :9321 (published) ──> your inference provider
-                    │ tool calls
-                    v
-                mimcp :8000 (published REST / MCP)
-                    │ relay
-                    v
-                klarna :9101 (compose network only)
+```mermaid
+flowchart LR
+    garak["garak runner (host)"] --> ogx["OGX Responses gateway"]
+    ogx --> llm["inference provider\n(OpenAI-compatible)"]
+    ogx -- "MCP tool calls" --> mimcp["MiMCP\n(man-in-the-middle)"]
+    mimcp -- relay --> klarna["Klarna MCP target"]
+    mimcp -. "splices attack payloads\ninto tool results" .-> ogx
 ```
 
 ## Layout

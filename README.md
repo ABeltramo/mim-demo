@@ -22,7 +22,7 @@ flowchart TD
 | `docker/`                   | our build overlays: klarna + ogx Dockerfiles and the streamable-HTTP klarna launcher (the [mini-agents](https://github.com/hjrnunes/mini-agents) submodule stays pristine) |
 | `mini-agents/`, `mimcp/`    | git submodules, pinned; mimcp ships its own Dockerfile                                                                                                                     |
 | `ogx/ogx-config.json`       | OGX config: everything deployment-specific comes from env vars                                                                                                             |
-| `scenario/klarna_demo.yaml` | garak attack scenario; upstream points at the `klarna` service                                                                                                             |
+| `garak/klarna_demo.yaml` | garak attack scenario; upstream points at the `klarna` service                                                                                                             |
 | `garak/mim-demo.yaml`       | garak run config for this deployment                                                                                                                                       |
 ## Setup
 

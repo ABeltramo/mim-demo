@@ -16,7 +16,7 @@ plugins:
   probes:
     midojo:
       MidojoProbe:
-        scenario_file: scenario/klarna_demo.yaml
+        scenario_file: garak/klarna_demo.yaml
   injectors:
     mimcp:
       MiMCPInjector:

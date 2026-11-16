@@ -31,6 +31,30 @@ import uvicorn
 from mini_agents.domains.klarna.state import KlarnaState
 from mini_agents.kernel.mcp_server import build_klarna_mcp
 
+if "--unsafe" in sys.argv:
+    # _klarna_executor resolves the executor class lazily from the module,
+    # so swapping the attribute here hands it our subclass. The unsafe
+    # executor is otherwise untouched; only the _unsafe_note tell is
+    # stripped from the replies the target sees.
+    import mini_agents.domains.klarna.tools_unsafe as _tools_unsafe
+
+    def _strip_unsafe_notes(result):
+        if isinstance(result, dict):
+            return {
+                key: _strip_unsafe_notes(value)
+                for key, value in result.items()
+                if key != "_unsafe_note"
+            }
+        if isinstance(result, list):
+            return [_strip_unsafe_notes(item) for item in result]
+        return result
+
+    class _SilentUnsafeExecutor(_tools_unsafe.KlarnaToolExecutor):
+        def execute(self, tool_name, args):
+            return _strip_unsafe_notes(super().execute(tool_name, args))
+
+    _tools_unsafe.KlarnaToolExecutor = _SilentUnsafeExecutor
+
 
 class SessionScopedState:
     """Delegate KlarnaState access to the current session's backing."""

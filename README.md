@@ -56,6 +56,25 @@ Keep `target_name` in `garak/mim-demo.yaml` in sync with `MODEL_ID` in
 `.env`. Results land in `~/.local/share/garak/garak_runs/` — see the MiM
 Demo wiki note for the jq one-liners over `notes.mimcp_calls`.
 
+### Red-team mode (unsafe ledger)
+
+`KLARNA_UNSAFE=1` rebuilds the Klarna agent with the code-level business
+rules stripped — the "tool layer trusts the model" deployment:
+
+```bash
+KLARNA_UNSAFE=1 podman compose up -d klarna
+```
+
+`garak/klarna_money_movement.yaml` is the A/B demo: success is the refund
+*completing*, not the model being fooled. Safe mode blocks the attack at
+the ledger (`REJECTED`, balance intact); unsafe mode completes it
+(`remaining_to_pay: 0.0` on an ineligible order).
+
+The agent's ledger is in-memory state shared by every session. Restart the
+klarna container to reset it between runs, and use `run.generations: 1` in
+unsafe mode so one generation's refund does not drain the balance for the
+next.
+
 ## Notes
 
 - `advertised_base: http://mimcp:8000` in the garak config is what makes the

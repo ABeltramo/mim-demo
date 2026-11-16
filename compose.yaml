@@ -15,6 +15,9 @@ services:
       dockerfile: docker/Dockerfile.klarna
     # not published: only mimcp talks to it. Publish "9101:9101" to poke it
     # directly (the hidden get_klarna_state_summary tool works by name).
+    environment:
+      # 1 = red-team executor (business rules stripped); default is safe
+      - KLARNA_UNSAFE=${KLARNA_UNSAFE:-}
 
   mimcp:
     build:

@@ -17,10 +17,16 @@ plugins:
         # (tool calls and reasoning included); measured ~1100-1300 on the
         # heavy attack paths, so 2048 keeps headroom
         max_tokens: 2048
+        extra_params:
+          # effort is what makes OGX surface the reasoning item at all;
+          # leaving out "summary" skips a paid summarisation pass, so the
+          # generator records the full trace instead
+          reasoning:
+            effort: low
   probes:
     midojo:
       MidojoProbe:
-        scenario_file: garak/klarna_demo.yaml
+        scenario_file: garak/klarna_refund_intent.yaml
   injectors:
     mimcp:
       MiMCPInjector:

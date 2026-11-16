@@ -22,7 +22,6 @@ flowchart TD
 | `docker/`                   | our build overlays: klarna + ogx Dockerfiles and the streamable-HTTP klarna launcher (the [mini-agents](https://github.com/hjrnunes/mini-agents) submodule stays pristine) |
 | `mini-agents/`, `mimcp/`    | git submodules, pinned; mimcp ships its own Dockerfile                                                                                                                     |
 | `ogx/ogx-config.json`       | OGX config: everything deployment-specific comes from env vars                                                                                                             |
-| `garak/klarna_demo.yaml` | garak attack scenario (instruction hijack: imperative injections, no user intent — expected to be refused); upstream points at the `klarna` service |
 | `garak/klarna_refund_intent.yaml` | garak attack scenario (data/policy tampering under a legitimate refund request — expected to hit) |
 | `garak/mim-demo.yaml`       | garak run config for this deployment                                                                                                                                       |
 ## Setup
@@ -65,15 +64,37 @@ rules stripped — the "tool layer trusts the model" deployment:
 KLARNA_UNSAFE=1 podman compose up -d klarna
 ```
 
-`garak/klarna_money_movement.yaml` is the A/B demo: success is the refund
-*completing*, not the model being fooled. Safe mode blocks the attack at
-the ledger (`REJECTED`, balance intact); unsafe mode completes it
-(`remaining_to_pay: 0.0` on an ineligible order).
+`garak/klarna_refund_intent.yaml` is the A/B demo. Its success criteria
+require the refund *completing*, not the model being fooled: safe mode
+blocks the attack at the ledger (`REJECTED`, balance intact), unsafe mode
+completes it (`remaining_to_pay: 0.0` on an ineligible order). The
+`non_tampered` entry is the control.
 
-The agent's ledger is in-memory state shared by every session. Restart the
-klarna container to reset it between runs, and use `run.generations: 1` in
-unsafe mode so one generation's refund does not drain the balance for the
-next.
+The agent's ledger is scoped to one MCP session: the launcher
+(`docker/klarna_http.py`) swaps in a fresh seeded `KlarnaState` whenever a
+new session appears and releases it when the client terminates the session.
+Each red-team generation arms its own MiMCP session, so every generation
+starts from the seed ledger — no restarts, any `run.generations` works, and
+completed refunds cannot contaminate the next generation. Sessions are
+served one at a time; the container log prints the state lifecycle
+(`state created/dropped for session ...`).
+
+## Dashboard
+
+`tools/dashboard.py` turns a report into one self-contained HTML file (no
+network, no external assets) with the attacks, the tool calls, the injected
+before/after diffs and the target's reasoning:
+
+```bash
+python3 tools/dashboard.py                 # newest report in the runs dir
+python3 tools/dashboard.py <report.jsonl>  # or a specific one
+```
+
+Reports come from `~/.local/share/garak/garak_runs` unless `GARAK_RUNS_DIR`
+is set. The output lands next to the report as `<report>.dashboard.html`.
+
+The before/after diff needs `upstream_response` in the recorded call, which
+the pinned MiMCP commit provides.
 
 ## Notes
 

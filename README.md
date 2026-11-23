@@ -50,7 +50,12 @@ The ledger is scoped to one MCP session: each generation's MiMCP session
 starts from the seeded state and is released on session close, so runs are
 repeatable without container restarts at any `run.generations`.
 
-`garak/klarna_refund_intent.yaml` is the demo scenario: a control attack
-(no tampering — must be refused) plus tool-data and policy tampering under
-a legitimate refund request. Success criteria require the refund to
-*complete*, not the model to be fooled.
+`garak/klarna_refund_intent.yaml` is the demo scenario (schema 0.2): a
+control case (no tampering — the benign refund must go through) plus
+tool-data and policy tampering under a legitimate refund request. Success
+criteria require the refund to *complete*, not the model to be fooled.
+The scenario carries no endpoints and no backend fields: the upstream URL
+and the agent's system prompt live in `garak/mim-demo.yaml`, which also
+declares the `klarna` MCP block the injector's route replaces. Control
+case results come from `midojo.MidojoControlDetector`, which flags a run
+whose benign flow broke.

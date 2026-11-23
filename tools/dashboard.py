@@ -116,19 +116,19 @@ def build_data(entries: list[dict]) -> dict:
                     "structured_content": body.get("structured_content"),
                 }
 
-            def call_view(c):
-                response = c.get("response") or {}
+            def event_view(event):
+                """One contract ToolCallEvent, as recorded per execution."""
+                result = event.get("result") or {}
                 return {
-                    "tool": c.get("tool"),
-                    "args": c.get("arguments"),
-                    "behavior": c.get("behavior"),
-                    "status": c.get("status"),
-                    "duration_ms": c.get("duration_ms"),
-                    "response_text": response.get("text"),
-                    "structured": response.get("structured_content"),
-                    "is_error": response.get("is_error"),
-                    # pre-rewrite upstream body (newer MiMCP reports only)
-                    "upstream": body_view(c.get("upstream_response")),
+                    "tool": event.get("tool"),
+                    "args": event.get("arguments"),
+                    "injected": event.get("injected"),
+                    "outcome": event.get("outcome"),
+                    "response_text": result.get("text"),
+                    "structured": result.get("structured_content"),
+                    "is_error": result.get("is_error"),
+                    # the result before the injector rewrote it
+                    "upstream": body_view(event.get("original_result")),
                 }
 
             prompt = [
@@ -136,39 +136,44 @@ def build_data(entries: list[dict]) -> dict:
                 for t in (entry.get("prompt", {}) or {}).get("turns", [])
             ]
             outputs = entry.get("outputs") or []
-            scores = entry.get("detector_results", {}).get("midojo.MidojoDetector") or []
+            case_kind = midojo.get("case_kind", "attack")
+            detector = (
+                "midojo.MidojoControlDetector"
+                if case_kind == "control"
+                else "midojo.MidojoDetector"
+            )
+            scores = entry.get("detector_results", {}).get(detector) or []
 
-            calls_by_generation = notes.get("mimcp_calls_by_generation")
-            if calls_by_generation:
-                generations = [
+            executions = midojo.get("executions") or []
+            generations = []
+            for index in range(max(len(outputs), len(executions), 1)):
+                execution = executions[index] if index < len(executions) else {}
+                delivery = execution.get("delivery") or {}
+                coverage = execution.get("coverage") or {}
+                generations.append(
                     {
-                        "answer": outputs[i].get("text") if i < len(outputs) else None,
-                        "timeline": _timeline(outputs, i, [call_view(c) for c in gen_calls]),
-                        "score": scores[i] if i < len(scores) else None,
-                    }
-                    for i, gen_calls in enumerate(calls_by_generation)
-                ]
-            else:
-                # older reports carry one flat call log
-                generations = [
-                    {
-                        "answer": outputs[i].get("text") if i < len(outputs) else None,
+                        "answer": outputs[index].get("text")
+                        if index < len(outputs)
+                        else None,
                         "timeline": _timeline(
                             outputs,
-                            i,
-                            [call_view(c) for c in notes.get("mimcp_calls", [])],
+                            index,
+                            [event_view(e) for e in execution.get("events") or []],
                         ),
-                        "score": scores[i] if i < len(scores) else None,
+                        "score": scores[index] if index < len(scores) else None,
+                        "delivered": delivery.get("delivered"),
+                        "coverage_errors": coverage.get("errors") or [],
                     }
-                    for i in range(max(len(outputs), 1))
-                ]
+                )
             attempts.append(
                 {
                     "seq": entry.get("seq"),
-                    "attack_id": midojo.get("attack_id"),
+                    "case_id": midojo.get("case_id"),
+                    "case_kind": case_kind,
+                    "channel": midojo.get("channel"),
                     "goal": entry.get("goal"),
                     "criteria": midojo.get("success"),
-                    "overlay": midojo.get("tools", []),
+                    "unsupported": midojo.get("unsupported"),
                     "prompt": prompt,
                     "generations": generations,
                     "error": notes.get("midojo_error"),
@@ -181,18 +186,24 @@ def build_data(entries: list[dict]) -> dict:
     if shared_prompt:
         for attempt in attempts:
             attempt["prompt"] = []
+    attacks = [a for a in attempts if a["case_kind"] == "attack"]
+    controls = [a for a in attempts if a["case_kind"] == "control"]
     hits = sum(
-        1
-        for a in attempts
-        if any(g.get("score") == 1.0 for g in a["generations"])
+        1 for a in attacks if any(g.get("score") == 1.0 for g in a["generations"])
+    )
+    # a control scores 1.0 on the control detector when the benign task failed
+    controls_failed = sum(
+        1 for a in controls if any(g.get("score") == 1.0 for g in a["generations"])
     )
     return {
         "prompt": shared_prompt,
         "meta": meta,
         "summary": {
-            "attacks": len(attempts),
+            "attacks": len(attacks),
             "hits": hits,
-            "asr": round(100.0 * hits / len(attempts), 1) if attempts else 0.0,
+            "asr": round(100.0 * hits / len(attacks), 1) if attacks else 0.0,
+            "controls": len(controls),
+            "controls_failed": controls_failed,
             "evals": evals,
         },
         "attempts": attempts,
@@ -285,7 +296,7 @@ TEMPLATE = r"""<!DOCTYPE html>
        letter-spacing: .5px; text-transform: uppercase; }
   .b.inject   { background: rgba(224,175,104,.18); color: var(--inject); }
   .b.relay    { background: rgba(115,218,202,.14); color: var(--relay); }
-  .b.override { background: rgba(187,154,247,.18); color: var(--override); }
+  .b.err      { background: rgba(247,118,142,.18); color: var(--hit); }
 
   .resp { font-family: ui-monospace, Menlo, monospace; font-size: 12px;
           white-space: pre-wrap; word-break: break-word; color: var(--text);
@@ -339,7 +350,7 @@ function fmtCriteria(c) {
     if (k === "tool_called") {
       const extra = [];
       if (v.args) extra.push(j(v.args));
-      if (v.response_contains) extra.push(`+${esc(v.response_contains)}`);
+      if (v.result_field) extra.push(`· ${esc(v.result_field.path)}=${j(v.result_field.equals)}`);
       parts.push(`tool_called <b>${esc(v.name)}</b> ${extra.join(" ")}`);
     }
     else if (k === "output_contains") parts.push(`~${j(v)}`);
@@ -411,8 +422,10 @@ function renderDiff(before, after) {
   return `<div class="diff">${parts.join("")}</div>`;
 }
 
-/* Tampering shown once per call: the channel that actually changed. */
-function renderTamper(call, overlay) {
+/* Tampering shown once per event: the channel that actually changed. The
+   events carry the pre-rewrite result, so no overlay reconstruction is
+   needed. */
+function renderTamper(call) {
   const upstreamText = call.upstream?.text;
   const textChanged = upstreamText != null && upstreamText !== call.response_text;
   const upstreamStructured = call.upstream?.structured_content;
@@ -426,42 +439,30 @@ function renderTamper(call, overlay) {
     return renderDiff(JSON.stringify(upstreamStructured, null, 2),
                       JSON.stringify(call.structured, null, 2));
   }
-  const reconstructed = reconstructBefore(call, overlay);
-  if (reconstructed != null && reconstructed !== call.response_text)
-    return renderDiff(pretty(reconstructed, false), pretty(call.response_text, false));
   return null;
 }
 
-function reconstructBefore(call, overlay) {
-  const t = (overlay || []).find(t => t.name === call.tool);
-  const template = t?.behavior?.template;
-  const text = call.response_text;
-  if (!template || text == null) return null;
-  const marker = "{original_text}";
-  const at = template.indexOf(marker);
-  if (at < 0) return null;
-  const prefix = template.slice(0, at), suffix = template.slice(at + marker.length);
-  if (!text.startsWith(prefix) || !text.endsWith(suffix)) return null;
-  return text.slice(prefix.length, text.length - suffix.length);
-}
-
-function renderCall(call, overlay) {
-  const dur = call.duration_ms != null ? `${Math.round(call.duration_ms)}ms` : "";
-  const tamper = call.behavior === "inject" ? renderTamper(call, overlay) : null;
+function renderCall(call) {
+  const tamper = call.injected ? renderTamper(call) : null;
   const raw = pretty(call.response_text) ?? "";
   const body = tamper ?? `<div class="resp">${esc(raw)}</div>`;
+  const badge = call.injected ? "inject" : "relay";
+  const failed = call.outcome === "error" ? ' <span class="b err">error</span>' : "";
   return `<div class="call">
     <div class="call-l">
       <div class="call-h"><span class="tool">${esc(call.tool)}</span>
-        <span class="b ${esc(call.behavior || "relay")}">${esc(call.behavior || "relay")}</span>
-        <span class="dim">${dur}</span></div>
+        <span class="b ${badge}">${badge}</span>${failed}</div>
       <div class="args">${esc(compact(call.args ?? {}))}</div>
     </div>
     <div class="call-r">${body}</div>
   </div>`;
 }
 
-function scoreBadge(score) {
+function scoreBadge(score, control) {
+  if (control)
+    return score === 1.0 ? '<span class="badge hit">CTRL FAIL</span>'
+      : score === 0.0 ? '<span class="badge miss">HELD</span>'
+      : '<span class="badge err">?</span>';
   return score === 1.0 ? '<span class="badge hit">HIT</span>'
     : score === 0.0 ? '<span class="badge miss">MISS</span>'
     : '<span class="badge err">?</span>';
@@ -473,43 +474,55 @@ function renderThinking(text) {
     <div class="resp think">${esc(text)}</div></details>`;
 }
 
-function renderGeneration(g, i, overlay) {
+function renderGeneration(g, i, control) {
   const calls = g.timeline.filter(t => t.kind === "call").length;
   const body = g.timeline.length
     ? g.timeline.map(t => t.kind === "call"
-        ? renderCall(t.call, overlay)
+        ? renderCall(t.call)
         : renderThinking(t.text)).join("")
     : '<div class="none">no calls</div>';
   const answer = g.answer
     ? `<div class="resp answer">${esc(g.answer)}</div>`
     : '<div class="none">no answer</div>';
+  const flags = [
+    `${calls} call${calls === 1 ? "" : "s"}`,
+    g.delivered === false ? "not delivered" : null,
+    (g.coverage_errors || []).length ? "incomplete coverage" : null,
+  ].filter(Boolean).join(" · ");
   return `<details class="gen">
-    <summary><span class="caret">▸</span><span>gen ${i + 1}</span>${scoreBadge(g.score)}
-      <span class="dim">${calls} call${calls === 1 ? "" : "s"}</span></summary>
+    <summary><span class="caret">▸</span><span>gen ${i + 1}</span>${scoreBadge(g.score, control)}
+      <span class="dim">${esc(flags)}</span></summary>
     <div class="body">${body}${answer}</div>
   </details>`;
 }
 
 function renderAttempt(a) {
-  const anyHit = a.generations.some(g => g.score === 1.0);
-  const badge = a.error != null
+  const control = a.case_kind === "control";
+  const anyFlag = a.generations.some(g => g.score === 1.0);
+  const badge = (a.error != null || a.unsupported != null)
     ? '<span class="badge err">ERR</span>'
-    : anyHit ? '<span class="badge hit">HIT</span>' : '<span class="badge miss">MISS</span>';
-  const hits = a.generations.filter(g => g.score === 1.0).length;
+    : control
+      ? (anyFlag ? '<span class="badge hit">CTRL FAIL</span>'
+                 : '<span class="badge miss">CTRL OK</span>')
+      : anyFlag ? '<span class="badge hit">HIT</span>' : '<span class="badge miss">MISS</span>';
+  const flagged = a.generations.filter(g => g.score === 1.0).length;
+  const channel = a.channel ? ` · ${esc(a.channel)}` : "";
   const prompt = a.prompt.length
     ? `<details class="sub"><summary>prompt</summary>${a.prompt.map(t =>
         `<div class="resp">${esc(t.role)}: ${esc(t.text)}</div>`).join("")}</details>`
     : "";
-  const generations = a.generations.map((g, i) => renderGeneration(g, i, a.overlay)).join("");
-  const error = a.error != null ? `<div class="resp">${esc(a.error)}</div>` : "";
+  const generations = a.generations.map((g, i) => renderGeneration(g, i, control)).join("");
+  const problem = a.unsupported != null
+    ? `<div class="resp">${esc(a.unsupported)}</div>`
+    : a.error != null ? `<div class="resp">${esc(a.error)}</div>` : "";
   return `<details class="card">
     <summary title="${esc(a.goal)}"><span class="caret">▸</span>
       <span class="badge n">${(a.seq ?? 0) + 1}</span>${badge}
-      <span class="id">${esc(a.attack_id)}</span>
-      <span class="dim">${hits}/${a.generations.length}</span></summary>
+      <span class="id">${esc(a.case_id)}</span>
+      <span class="dim">${flagged}/${a.generations.length}${channel}</span></summary>
     <div class="body">
       <div class="crit">${fmtCriteria(a.criteria)}</div>
-      ${prompt}${generations}${error}
+      ${prompt}${generations}${problem}
     </div>
   </details>`;
 }
@@ -529,10 +542,14 @@ function render() {
   document.getElementById("meta").innerHTML =
     `<span title="${esc(title)}">${esc(m.target ?? "")}${m.target && started ? " · " : ""}${esc(started)}</span>`;
   const s = DATA.summary;
-  document.getElementById("stats").innerHTML = `
-    <div class="stat"><div class="n">${s.attacks}</div><div class="l">attacks</div></div>
-    <div class="stat"><div class="n" style="color:var(--hit)">${s.hits}</div><div class="l">hits</div></div>
-    <div class="stat"><div class="n">${s.asr}%</div><div class="l">ASR</div></div>`;
+  const stats = [
+    `<div class="stat"><div class="n">${s.attacks}</div><div class="l">attacks</div></div>`,
+    `<div class="stat"><div class="n" style="color:var(--hit)">${s.hits}</div><div class="l">hits</div></div>`,
+    `<div class="stat"><div class="n">${s.asr}%</div><div class="l">ASR</div></div>`,
+  ];
+  if (s.controls)
+    stats.push(`<div class="stat"><div class="n" style="color:${s.controls_failed ? "var(--hit)" : "var(--miss)"}">${s.controls_failed}/${s.controls}</div><div class="l">controls failed</div></div>`);
+  document.getElementById("stats").innerHTML = stats.join("");
   if (DATA.prompt && DATA.prompt.length) {
     document.getElementById("prompt").innerHTML =
       `<details class="sub"><summary>prompt</summary>${DATA.prompt.map(t =>
